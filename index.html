@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Ruleta" />
+    <meta name="theme-color" content="#eee9dd" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <title>Ruleta de dados</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="icons.css" />
+    <script>
+      document.documentElement.dataset.tema =
+        localStorage.getItem("tema") || "claro";
+      document.documentElement.dataset.vista = (
+        localStorage.getItem("vista") || "normal"
+      ).replace("simple", "normal");
+      document.documentElement.dataset.col =
+        localStorage.getItem("soloTexto") == "1" ? "on" : "off";
+    </script>
+  </head>
+  <body>
+    <header>
+      <h1><img src="icon-192.png" alt="" />Ruleta · <span id="n">0</span></h1>
+      <button class="btn" id="undo" aria-label="Deshacer">
+        <i class="ic" data-i="undo"></i><span class="tx">deshacer</span>
+      </button>
+    </header>
+    <nav>
+      <button data-t="j" class="on" aria-label="Jugar">
+        <i class="ic" data-i="jugar"></i><span class="tx">Jugar</span></button
+      ><button data-t="a" aria-label="Análisis">
+        <i class="ic" data-i="analisis"></i
+        ><span class="tx">Análisis</span></button
+      ><button data-t="d" aria-label="Ajustes">
+        <i class="ic" data-i="ajustes"></i><span class="tx">Ajustes</span>
+      </button>
+    </nav>
+
+    <section id="j">
+      <div class="in">
+        <input
+          id="in"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="2"
+          placeholder="Número que salió (0-36)"
+          autocomplete="off"
+        /><button class="btn" id="ok" aria-label="OK">
+          <i class="ic" data-i="ok" style="margin: 0"></i>
+        </button>
+      </div>
+      <div id="disc"></div>
+      <div id="ult"></div>
+      <div id="hist"></div>
+      <div id="filas"></div>
+      <p id="conf" class="d"></p>
+      <div id="extra"></div>
+    </section>
+
+    <section id="a" hidden></section>
+
+    <section id="d" hidden>
+      <h3>Vista</h3>
+      <div class="seg" id="vista">
+        <button data-v="discreto">
+          <i class="ic" data-i="vista-discreto"></i>Discreto</button
+        ><button data-v="normal">
+          <i class="ic" data-i="vista-normal"></i>Normal</button
+        ><button data-v="avanzado">
+          <i class="ic" data-i="vista-avanzado"></i>Avanzado
+        </button>
+      </div>
+      <p class="d">
+        Discreto: solo a qué apostar. Normal: todas las opciones y la sugerida.
+        Avanzado: probabilidades, pagos y más datos.
+      </p>
+      <label
+        ><input type="checkbox" id="co" /> Solo el texto de los números con
+        color</label
+      >
+      <p class="d">
+        Desactivado: fichas con relleno de color. Activado: sin relleno, solo el
+        texto en color (rojo y verde); los negros usan el color normal del
+        texto.
+      </p>
+      <h3>Tema</h3>
+      <button class="btn tm" data-m="claro">
+        <i class="ic" data-i="tema-claro"></i>Claro</button
+      ><button class="btn tm" data-m="oscuro">
+        <i class="ic" data-i="tema-oscuro"></i>Oscuro</button
+      ><button class="btn tm" data-m="bosque">
+        <i class="ic" data-i="tema-bosque"></i>Bosque
+      </button>
+      <h3>Respaldo</h3>
+      <p class="d">
+        El historial vive solo en este teléfono (dentro de la app instalada).
+        Exporta de vez en cuando: si borras datos del sitio o desinstalas, se
+        pierde.
+      </p>
+      <button class="btn" id="eC">
+        <i class="ic" data-i="exportar"></i>Exportar CSV</button
+      ><button class="btn" id="cp">
+        <i class="ic" data-i="copiar"></i>Copiar CSV
+      </button>
+      <h3>Importar</h3>
+      <p class="d">
+        Pega números (uno por línea o separados por comas) o filas del
+        tiradas.csv de Python (negro,blanco,verde1,verde2). Se agregan al final.
+      </p>
+      <textarea id="imp" rows="4"></textarea
+      ><button class="btn" id="bi">
+        <i class="ic" data-i="importar"></i>Importar texto</button
+      ><input type="file" id="fi" accept=".csv,.json,.txt" />
+      <h3>Captura</h3>
+      <label><input type="checkbox" id="av" /> Capturar los 4 dados</label>
+      <p class="d">
+        Escribe 4 dígitos seguidos: negro, blanco, verde, verde (5324 = negro 5,
+        blanco 3, verdes 2 y 4). Así se analiza cada dado verde por separado.
+      </p>
+      <h3>Pago del verde (retorno total)</h3>
+      <input type="number" id="pv" step="0.5" min="1" />
+      <p class="d">36 = paga 35 a 1. Ajústalo al pago real de tu máquina.</p>
+      <h3>Zona peligrosa</h3>
+      <button class="btn u" id="del">
+        <i class="ic" data-i="borrar"></i>Borrar todo el historial
+      </button>
+      <p class="d" id="st"></p>
+    </section>
+
+    <script>
+      //datos basic
+      // $ = atajo para document.querySelector. R = números rojos de la ruleta.
+      // T = historial de números que salieron. D = los 4 dados de cada tirada (o null).
+      const $ = (s) => document.querySelector(s),
+        R = new Set([
+          1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
+        ]);
+      const col = (n) => (n == 0 ? "ver" : R.has(n) ? "rojo" : "neg"),
+        NM = { rojo: "ROJO", neg: "NEGRO", ver: "VERDE" };
+      let T = JSON.parse(localStorage.getItem("tiradas") || "[]"),
+        D = JSON.parse(localStorage.getItem("dados") || "[]"),
+        PV = +localStorage.getItem("pagoVerde") || 36,
+        AV = localStorage.getItem("avanzado") == "1";
+      while (D.length < T.length) D.push(null);
+      D.length = T.length;
+      const save = () => {
+          localStorage.setItem("tiradas", JSON.stringify(T));
+          localStorage.setItem("dados", JSON.stringify(D));
+        },
+        PR = 100,
+        PRV = 3000;
+      const neg = (n) => Math.floor((n - 1) / 6) + 1,
+        bl = (n) => ((n - 1) % 6) + 1,
+        pj = (n) => (n == 0 ? 1 / 36 : 35 / 1296),
+        sg = (v) => (v >= 0 ? "+" : "") + v.toFixed(1);
+
+      //estadistica
+      // lg, gq y chiP calculan el valor p de la prueba chi-cuadrada (¿los dados son justos?)
+      function lg(z) {
+        const c = [
+          76.18009172947146, -86.50532032941677, 24.01409824083091,
+          -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5,
+        ];
+        let y = z,
+          t = z + 5.5;
+        t -= (z + 0.5) * Math.log(t);
+        let s = 1.000000000190015;
+        for (const k of c) s += k / ++y;
+        return -t + Math.log((2.5066282746310005 * s) / z);
+      }
+      function gq(a, x) {
+        if (x <= 0) return 1;
+        const g = lg(a);
+        if (x < a + 1) {
+          let ap = a,
+            s = 1 / a,
+            d = s;
+          for (let i = 0; i < 500; i++) {
+            ap++;
+            d *= x / ap;
+            s += d;
+            if (Math.abs(d) < Math.abs(s) * 1e-14) break;
+          }
+          return 1 - s * Math.exp(-x + a * Math.log(x) - g);
+        }
+        let b = x + 1 - a,
+          c = 1e300,
+          d = 1 / b,
+          h = d;
+        for (let i = 1; i < 500; i++) {
+          const an = -i * (i - a);
+          b += 2;
+          d = an * d + b;
+          if (Math.abs(d) < 1e-300) d = 1e-300;
+          c = b + an / c;
+          if (Math.abs(c) < 1e-300) c = 1e-300;
+          d = 1 / d;
+          const dl = d * c;
+          h *= dl;
+          if (Math.abs(dl - 1) < 1e-14) break;
+        }
+        return Math.exp(-x + a * Math.log(x) - g) * h;
+      }
+      const chiP = (x, df) => gq(df / 2, x / 2);
+
+      //conteo y prob
+      // cuentas: cuántas veces salió cada cara (1-6) de un dado. probs: probabilidad estimada de cada número 0-36.
+      const nb = (i) =>
+          D[i] ? [D[i][0], D[i][1]] : T[i] > 0 ? [neg(T[i]), bl(T[i])] : null,
+        tot = (c) => c.reduce((a, b) => a + b, 0);
+      function cuentas(j) {
+        const c = Array(7).fill(0);
+        T.forEach((_, i) => {
+          const x = nb(i);
+          if (x) c[x[j]]++;
+        });
+        return c;
+      }
+      function probs() {
+        const a = cuentas(0),
+          b = cuentas(1),
+          ka = tot(a),
+          kb = tot(b),
+          k0 = T.filter((n) => n == 0).length,
+          p0 = (k0 + PRV / 36) / (T.length + PRV),
+          p = [p0];
+        for (let n = 1; n <= 36; n++)
+          p[n] =
+            (1 - p0) *
+            ((a[neg(n)] + PR / 6) / (ka + PR)) *
+            ((b[bl(n)] + PR / 6) / (kb + PR));
+        return p;
+      }
+      //analisis: corre las pruebas de sesgo y dice si hay señal real o solo ruido
+      function analisis() {
+        const N = T.length,
+          tests = [];
+        const chi = (nm, c) => {
+          const k = tot(c),
+            e = k / 6;
+          if (k)
+            tests.push([
+              nm,
+              c.slice(1).join(" · "),
+              chiP(
+                c.slice(1).reduce((s, v) => s + (v - e) ** 2 / e, 0),
+                5,
+              ),
+            ]);
+        };
+        chi("Dado negro", cuentas(0));
+        chi("Dado blanco", cuentas(1));
+        const dv = D.filter(Boolean);
+        [
+          ["Verde 1", 2],
+          ["Verde 2", 3],
+        ].forEach(([nm, j]) => {
+          const c = Array(7).fill(0);
+          dv.forEach((d) => c[d[j]]++);
+          chi(nm, c);
+        });
+        const k0 = T.filter((n) => n == 0).length,
+          e0 = N / 36;
+        if (N)
+          tests.push([
+            "Verde (0)",
+            `${k0} de ${N} (esp. ${e0.toFixed(1)})`,
+            chiP((k0 - e0) ** 2 / ((e0 * 35) / 36), 1),
+          ]);
+        const u = 0.05 / Math.max(tests.length, 1),
+          al = tests.filter((t) => t[2] < u).map((t) => t[0]);
+        return {
+          tests,
+          al,
+          u,
+          nivel: N < 100 ? "baja" : al.length ? "alerta" : "neutra",
+        };
+      }
+
+      //pantalla jugar
+      // H: las apuestas que se comparan (rojo/negro/verde, par/impar, bajo/alto)
+      const H = () => [
+        [
+          "¿Dónde apostar?",
+          [
+            ["rojo", (n) => R.has(n), 2],
+            ["negro", (n) => n > 0 && !R.has(n), 2],
+            ["verde", (n) => n == 0, PV],
+          ],
+        ],
+        [
+          "Par o impar",
+          [
+            ["par", (n) => n > 0 && n % 2 == 0, 2],
+            ["impar", (n) => n % 2 == 1, 2],
+          ],
+        ],
+        [
+          "Bajo o alto",
+          [
+            ["1-18", (n) => n >= 1 && n <= 18, 2],
+            ["19-36", (n) => n >= 19, 2],
+          ],
+        ],
+      ];
+
+      // render
+      function render() {
+        const p = probs(),
+          an = analisis(),
+          last = T.at(-1);
+        $("#n").textContent = T.length;
+        $("#ult").innerHTML =
+          last === undefined
+            ? "<span class=d>Toca el número que salió</span>"
+            : `Salió <span class="chip ${col(last)}">${last}</span> <b>${NM[col(last)]}</b>`;
+        $("#hist").innerHTML = T.slice(-20)
+          .map((n) => `<span class="chip ${col(n)}">${n}</span>`)
+          .join("");
+        $("#hist").scrollLeft = 1e5;
+        const pk = [];
+        $("#filas").innerHTML = H()
+          .map(([t, ops], i) => {
+            const o = ops.map(([nm, f, m]) => {
+              let pr = 0,
+                j = 0;
+              for (let n = 0; n <= 36; n++)
+                if (f(n)) {
+                  pr += p[n];
+                  j += pj(n);
+                }
+              return { nm, pr, r: pr / j, rtp: pr * m, m };
+            });
+            const mx = Math.max(...o.map((x) => x.r)),
+              emp = mx - Math.min(...o.map((x) => x.r)) < 0.005;
+            pk.push(emp ? "=" : o.find((x) => x.r == mx).nm);
+            return (
+              `<h3>${t} ${i == 0 && an.nivel != "alerta" ? "<small>· tendencia débil, probablemente ruido</small>" : ""}</h3><div class=row>` +
+              o
+                .map((x) => {
+                  const b = !emp && x.r == mx,
+                    c =
+                      x.nm == "rojo"
+                        ? "rojo"
+                        : x.nm == "negro"
+                          ? "neg"
+                          : x.nm == "verde"
+                            ? "ver"
+                            : "";
+                  return `<div class="card ${c} ${b ? "best" : ""}"><span><b>${x.nm.toUpperCase()}</b> ${(x.pr * 100).toFixed(1)}%</span><span class="d adv">${sg((x.r - 1) * 100)}% vs justo · ret ${x.rtp.toFixed(3)}</span><span class="d adv">paga ${x.m - 1}:1</span><em class="${b ? "" : "t"}">${b ? "> APOSTAR <" : emp ? "≈ empate" : "&nbsp;"}</em></div>`;
+                })
+                .join("") +
+              "</div>"
+            );
+          })
+          .join("");
+        $("#disc").innerHTML =
+          (last === undefined
+            ? ""
+            : `<span class="chip ${col(last)}">${last}</span> `) +
+          pk.map((x) => (x == "=" ? "–" : x)).join(" · ");
+        const top = p
+          .map((v, n) => [v, n])
+          .filter((x) => x[1] > 0)
+          .sort((a, b) => b[0] - a[0])
+          .slice(0, 5);
+        const dz = [
+          ["1a docena", (n) => n >= 1 && n <= 12],
+          ["2a docena", (n) => n >= 13 && n <= 24],
+          ["3a docena", (n) => n >= 25],
+          ["Columna 1", (n) => n > 0 && n % 3 == 1],
+          ["Columna 2", (n) => n > 0 && n % 3 == 2],
+          ["Columna 3", (n) => n > 0 && n % 3 == 0],
+        ]
+          .map(([nm, f]) => {
+            let pr = 0;
+            for (let n = 0; n <= 36; n++) if (f(n)) pr += p[n];
+            return [nm, pr];
+          })
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3);
+        $("#extra").innerHTML =
+          "<h3>Otras apuestas</h3>" +
+          dz
+            .map(
+              ([nm, pr]) =>
+                `<div class=r><span>${nm}</span><span>${(pr * 100).toFixed(1)}% · ret ${(pr * 3).toFixed(3)}</span></div>`,
+            )
+            .join("") +
+          "<h3>Números más probables <small>(justo 2.70%)</small></h3>" +
+          top
+            .map(
+              ([v, n]) =>
+                `<span class="chip ${col(n)}">${n}</span> ${(v * 100).toFixed(2)}% `,
+            )
+            .join("");
+        $("#conf").textContent = {
+          baja: "Confianza MUY BAJA (menos de 100 tiradas): casi puro ruido.",
+          alerta:
+            "Posible sesgo en: " +
+            an.al.join(", ") +
+            ". Confirma con más tiradas.",
+          neutra:
+            'Sin sesgo detectado: el "mejor" es ruido; con dados justos todo rinde ~0.972. Esto no predice la próxima tirada.',
+        }[an.nivel];
+      }
+
+      // pestaña analisis
+      function vistaAn() {
+        const an = analisis();
+        $("#a").innerHTML =
+          `<h3>Pruebas de sesgo (${T.length} tiradas)</h3><table><tr><th>Prueba</th><th>Conteo caras 1-6</th><th>p</th></tr>` +
+          an.tests
+            .map(
+              ([n, c, p]) =>
+                `<tr><td>${n}</td><td>${c}</td><td class="${p < an.u ? "warn" : p < 0.05 ? "mid" : "ok"}">${p.toFixed(3)}</td></tr>`,
+            )
+            .join("") +
+          `</table><p class=d>Umbral con corrección de Bonferroni: p &lt; ${an.u.toFixed(4)}. Para probar cada dado verde por separado, activa «Capturar los 4 dados» en Ajustes. Con menos de ~1,000 tiradas, "sin sesgo" no significa mucho.</p>` +
+          (T.length < 30 ? "<p class=warn>Muy pocos datos (&lt;30).</p>" : "");
+      }
+
+      //input de numeros
+      // add: agrega una tirada. modo: cambia el campo entre 1 número o 4 dados. go: valida lo escrito.
+      const add = (n, d) => {
+        T.push(n);
+        D.push(d || null);
+        save();
+        render();
+      };
+      const modo = () => {
+        $("#in").maxLength = AV ? 4 : 2;
+        $("#in").placeholder = AV
+          ? "4 dados: negro blanco verde verde (ej 5324)"
+          : "Número que salió (0-36)";
+      };
+      const go = () => {
+        const i = $("#in"),
+          v = i.value.replace(/\D/g, "");
+        if (AV) {
+          const d = v.split("").map(Number);
+          if (v.length == 4 && d.every((x) => x >= 1 && x <= 6))
+            add(d[2] == 6 && d[3] == 6 ? 0 : 6 * (d[0] - 1) + d[1], d);
+          else if (v) {
+            i.select();
+            return;
+          }
+        } else if (v && +v <= 36) add(+v);
+        else if (v) {
+          i.select();
+          return;
+        }
+        i.value = "";
+        i.focus();
+      };
+      $("#in").oninput = (e) => {
+        const v = e.target.value.replace(/\D/g, "");
+        e.target.value = v;
+        if (AV ? v.length == 4 : v && (v.length == 2 || +v >= 4 || v == "0"))
+          go();
+      };
+      $("#in").onkeydown = (e) => {
+        if (e.key == "Enter") go();
+      };
+      $("#ok").onclick = go;
+      $("#undo").onclick = () => {
+        T.pop();
+        D.pop();
+        save();
+        render();
+      };
+      // pestañas
+      document.querySelectorAll("nav button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            document
+              .querySelectorAll("nav button")
+              .forEach((x) => x.classList.toggle("on", x == b));
+            ["j", "a", "d"].forEach(
+              (s) => ($("#" + s).hidden = s != b.dataset.t),
+            );
+            if (b.dataset.t == "a") vistaAn();
+            if (b.dataset.t == "d") est();
+          }),
+      );
+
+      //exportar/importar
+      // bajar: descarga un archivo. csv: arma el texto CSV. parse/imp: leen números pegados o de un archivo.
+      function bajar(txt, nom, tipo) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([txt], { type: tipo }));
+        a.download = nom;
+        a.click();
+      }
+      const csv = () =>
+        "negro,blanco,verde1,verde2\n" +
+        T.map((n, i) =>
+          (D[i] || (n == 0 ? [0, 0, 0, 0] : [neg(n), bl(n), 0, 0])).join(","),
+        ).join("\n");
+      $("#eC").onclick = () => bajar(csv(), "tiradas.csv", "text/csv");
+      $("#cp").onclick = () =>
+        navigator.clipboard
+          .writeText(csv())
+          .then(() => alert("Copiado (" + T.length + ")"));
+      function parse(t) {
+        const o = [];
+        t.split(/\r?\n/).forEach((l) => {
+          const f = l
+            .split(/[,;\s\[\]]+/)
+            .filter((x) => /^\d+$/.test(x))
+            .map(Number);
+          if (f.length == 4 && f.every((v) => v <= 6))
+            o.push([
+              f[0] == 0 || (f[2] == 6 && f[3] == 6) ? 0 : 6 * (f[0] - 1) + f[1],
+              f.every((v) => v >= 1) ? f : null,
+            ]);
+          else
+            f.forEach((v) => {
+              if (v <= 36) o.push([v, null]);
+            });
+        });
+        return o;
+      }
+      function imp(t) {
+        const o = parse(t);
+        if (!o.length) return alert("No encontré números válidos");
+        T = T.concat(o.map((x) => x[0]));
+        D = D.concat(o.map((x) => x[1]));
+        save();
+        render();
+        alert("Importadas " + o.length);
+      }
+      $("#bi").onclick = () => {
+        imp($("#imp").value);
+        $("#imp").value = "";
+      };
+      $("#fi").onchange = (e) =>
+        e.target.files[0] && e.target.files[0].text().then(imp);
+      //ajustes
+      $("#av").checked = AV;
+      $("#av").onchange = (e) => {
+        AV = e.target.checked;
+        localStorage.setItem("avanzado", AV ? 1 : 0);
+        modo();
+      };
+      modo();
+      $("#pv").value = PV;
+      $("#pv").onchange = (e) => {
+        PV = +e.target.value || 36;
+        localStorage.setItem("pagoVerde", PV);
+        render();
+      };
+      $("#del").onclick = () => {
+        if (
+          confirm("¿Borrar las " + T.length + " tiradas? No se puede deshacer.")
+        ) {
+          T = [];
+          D = [];
+          save();
+          render();
+        }
+      };
+      // esta guardando?
+      function est() {
+        navigator.storage && navigator.storage.persisted
+          ? navigator.storage
+              .persisted()
+              .then(
+                (p) =>
+                  ($("#st").textContent = p
+                    ? "Almacenamiento persistente: sí."
+                    : "Almacenamiento persistente: no garantizado; exporta respaldos."),
+              )
+          : 0;
+      }
+      // Almacenamiento persistente y service worker (offfffline)
+      navigator.storage &&
+        navigator.storage.persist &&
+        navigator.storage.persist();
+      if ("serviceWorker" in navigator)
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      // vista: Discreto / Normal / Avanzado. tema: Claro / Oscuro / Bosque.
+      const vista = (v) => {
+        document.documentElement.dataset.vista = v;
+        localStorage.setItem("vista", v);
+        document
+          .querySelectorAll("#vista button")
+          .forEach((b) => b.classList.toggle("on", b.dataset.v == v));
+      };
+      document
+        .querySelectorAll("#vista button")
+        .forEach((b) => (b.onclick = () => vista(b.dataset.v)));
+      vista(
+        (localStorage.getItem("vista") || "normal").replace("simple", "normal"),
+      );
+      $("#co").checked = document.documentElement.dataset.col == "on";
+      $("#co").onchange = (e) => {
+        document.documentElement.dataset.col = e.target.checked ? "on" : "off";
+        localStorage.setItem("soloTexto", e.target.checked ? 1 : 0);
+      };
+      const TM = { claro: "#eee9dd", oscuro: "#1c1c1c", bosque: "#0f2618" };
+      const tema = (t) => {
+        document.documentElement.dataset.tema = t;
+        localStorage.setItem("tema", t);
+        document.querySelector("meta[name=theme-color]").content = TM[t];
+        document
+          .querySelectorAll(".tm")
+          .forEach((b) => b.classList.toggle("on", b.dataset.m == t));
+      };
+      document
+        .querySelectorAll(".tm")
+        .forEach((b) => (b.onclick = () => tema(b.dataset.m)));
+      tema(localStorage.getItem("tema") || "oscuro");
+      // Arranque
+      render();
+    </script>
+  </body>
+</html>
